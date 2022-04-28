@@ -109,7 +109,6 @@ class RippleNet(basemodel.ItemTowerRecommender):
                 if h == 0:
                     tails_of_last_hop = self.user_history_dict[user]
                 else:
-                    # tails_of_last_hop = ripple_set[user][-1][2]
                     tails_of_last_hop = self.ripple_set_t[h - 1][user]
                 
                 for entity in tails_of_last_hop:
@@ -121,6 +120,8 @@ class RippleNet(basemodel.ItemTowerRecommender):
                         memories_t.append(tail_and_relation[0])
                 # if the current ripple set of the given user is empty, we simply copy the ripple set of the last hop here
                 if len(memories_h) == 0:
+                    if h == 0:
+                        pass 
                     self.ripple_set_h[h][user] = self.ripple_set_h[h - 1][user]
                     self.ripple_set_r[h][user] = self.ripple_set_r[h - 1][user]
                     self.ripple_set_t[h][user] = self.ripple_set_t[h - 1][user]
@@ -137,7 +138,6 @@ class RippleNet(basemodel.ItemTowerRecommender):
                     self.ripple_set_h[h][user] = memories_h
                     self.ripple_set_r[h][user] = memories_r
                     self.ripple_set_t[h][user] = memories_t
-                    # ripple_set[user].append((memories_h, memories_r, memories_t))
         
     
     def _key_addressing(self):
@@ -278,17 +278,17 @@ class RippleNet(basemodel.ItemTowerRecommender):
         # calculate kge loss
         kge_loss = 0
         for hop in range(len(self.kge_h_emb_list)):
-            # [batch_size, n_memories, dim, 1]
-            h = self.kge_h_emb_list[hop].unsqueeze(-1)
+            # [batch_size, n_memories, 1, dim]
+            h = self.kge_h_emb_list[hop].unsqueeze(-2)
             # [batch_size, n_memories, dim, dim]
             r = self.kge_r_emb_list[hop].reshape(-1, self.n_memory, self.embed_dim, self.embed_dim)
             # [batch_size, n_memories, dim]
-            Rh = torch.matmul(r, h).squeeze(-1)
+            hR = torch.matmul(h, r).squeeze(-2)
             # [batch_size, n_memories, dim]
             t = self.kge_t_emb_list[hop]
             # [batch_size, n_memories]
-            hRt = torch.sigmoid(torch.sum(Rh * t, dim=-1))
+            hRt = torch.sigmoid(torch.sum(hR * t, dim=-1))
             kge_loss += torch.mean(hRt)
-        kge_loss = -self.kge_weight * kge_loss
+        kge_loss = -self.kge_weight * kge_loss * 0.5
         
         return loss + kge_loss 

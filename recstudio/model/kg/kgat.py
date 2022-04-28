@@ -34,11 +34,12 @@ class KGATConv(nn.Module):
 
     def forward(self, A_in, embeddings):
         all_embeddings = [embeddings]
+        ego_embeddings = embeddings
         for aggregator in self.aggregators:
             # [num_users + num_entities, dim]
-            side_embeddings = torch.sparse.mm(A_in, all_embeddings[-1])
-            embeddings = aggregator(embeddings, side_embeddings)
-            norm_embeddings = F.normalize(embeddings, p=2, dim=-1)
+            side_embeddings = torch.sparse.mm(A_in, ego_embeddings)
+            ego_embeddings = aggregator(ego_embeddings, side_embeddings)
+            norm_embeddings = F.normalize(ego_embeddings, p=2, dim=-1)
             all_embeddings.append(norm_embeddings)
         return all_embeddings
 
@@ -76,13 +77,14 @@ class KGAT(basemodel.TwoTowerRecommender):
         self.alg_type = config['alg_type']
         self.mess_dropout = config['mess_dropout']
         self.weight_size_list = [self.embed_dim] + config['layer_size']
+        self.n_fold = config.setdefault('n_fold')
 
     def init_model(self, train_data):
         self.fhid = train_data.get_network_field(self.kg_index, 0, 0)
         self.ftid = train_data.get_network_field(self.kg_index, 0, 1)
         self.frid = train_data.get_network_field(self.kg_index, 0, 2)
         self.A_size = (train_data.num_users + train_data.num_values(self.fhid), train_data.num_users + train_data.num_values(self.fhid))
-        self.ckg, num_relations = train_data.get_graph(idx=[0, 2], form='dgl', value_fields=['inter', 'relation_id'], bidirectional=[True, True], \
+        self.ckg, num_relations = train_data.get_graph(idx=[0, self.kg_index + 1], form='dgl', value_fields=['inter', 'relation_id'], bidirectional=[True, False], \
             row_offset=[0, train_data.num_users], col_offset=[train_data.num_users, train_data.num_users], shape=(self.A_size, self.A_size))
         self.num_users = train_data.num_users
         self.num_items = train_data.num_items
@@ -207,13 +209,21 @@ class KGAT(basemodel.TwoTowerRecommender):
         # [all_h, embed_dim]
         h_e = embeddings[all_h] 
         t_e = embeddings[all_t]
-        # [pro_embed_dim]
-        r_e = self.TransRTower.rel_emb.weight[r]
-        # [embed_dim, pro_embed_dim] to reduce memory
-        pro_matrix = self.TransRTower.pro_matrix_emb.weight[r].reshape(self.embed_dim, self.TransRTower.pro_embed_dim)
-        # [all_h, pro_embed_dim]
-        h_e = torch.matmul(h_e, pro_matrix)
-        t_e = torch.matmul(t_e, pro_matrix)
+        if type(r) == torch.Tensor:
+            h_e = h_e.unsqueeze(-2)
+            t_e = t_e.unsqueeze(-2)
+            r_e = self.TransRTower.rel_emb(r)
+            pro_matrix = self.TransRTower.pro_matrix_emb(r).reshape(-1, self.embed_dim, self.TransRTower.pro_embed_dim)
+            h_e = torch.matmul(h_e, pro_matrix).squeeze(-2)
+            t_e = torch.matmul(t_e, pro_matrix).squeeze(-2)
+        else:
+            # [pro_embed_dim]
+            r_e = self.TransRTower.rel_emb.weight[r]
+            # [embed_dim, pro_embed_dim] to reduce memory
+            pro_matrix = self.TransRTower.pro_matrix_emb.weight[r].reshape(self.embed_dim, self.TransRTower.pro_embed_dim)
+            # [all_h, pro_embed_dim]
+            h_e = torch.matmul(h_e, pro_matrix)
+            t_e = torch.matmul(t_e, pro_matrix)
 
         kg_score = torch.sum(t_e * torch.tanh(h_e + r_e), dim=-1)
         return kg_score
@@ -225,14 +235,30 @@ class KGAT(basemodel.TwoTowerRecommender):
         kg_score = []
         rows = []
         cols = []
-        for r in range(1, self.num_relations, 1):
-            selected_flag = (self.all_r == r)
-            h = self.all_h[selected_flag]
-            t = self.all_t[selected_flag]
-            r_kg_score = self._generate_transE_score(h, t, r)
-            kg_score.append(r_kg_score)
-            rows.append(h)
-            cols.append(t)
+        if self.n_fold != None:
+            fold_len = len(self.all_h) // self.n_fold
+            for i in range(self.n_fold):
+                start = i * fold_len
+                if start >= len(self.all_h):
+                    break
+                end = min(start + fold_len, len(self.all_h))
+                h = self.all_h[start:end]
+                t = self.all_t[start:end]
+                r = self.all_r[start:end]
+                r_kg_score = self._generate_transE_score(h, t, r)
+                kg_score.append(r_kg_score)
+                rows.append(h)
+                cols.append(t)
+
+        else:
+            for r in range(1, self.num_relations, 1):
+                selected_flag = (self.all_r == r)
+                h = self.all_h[selected_flag]
+                t = self.all_t[selected_flag]
+                r_kg_score = self._generate_transE_score(h, t, r)
+                kg_score.append(r_kg_score)
+                rows.append(h)
+                cols.append(t)
         rows = torch.cat(rows)
         cols = torch.cat(cols)
         kg_score = torch.cat(kg_score)

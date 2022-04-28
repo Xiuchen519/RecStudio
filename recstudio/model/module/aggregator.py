@@ -58,8 +58,6 @@ class NeighborAggregator(Aggregator):
         embeddings = self.dropout(embeddings)
         return embeddings
 
-torch.nn.Sigmoid
-
 class BiAggregator(Aggregator):
     def __init__(self, input_size, output_size, dropout=0.0, act=nn.ReLU()):
         super().__init__(input_size, output_size, dropout, act)

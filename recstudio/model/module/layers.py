@@ -214,3 +214,28 @@ class FusionMFMLPScorer(torch.nn.Module):
         h_mlp = self.mlp(torch.cat([query, key], dim=-1))
         h = self.W(torch.cat([h_mf, h_mlp], dim=-1))
         return self.activation(h).squeeze(-1)
+
+class SparseDropout(torch.nn.Module):
+    """
+    Dropout some nodes on adjacency matrix in sparse COO format. It is used in GNN-based models.
+    Parameters:
+        dropout_prob(float): probability of a node to be zeroed.
+    """
+    def __init__(self, dropout_prob) -> None:
+        super().__init__()
+        self.keep_prob = 1.0 - dropout_prob
+    
+    def forward(self, X):
+        """
+        Returns:
+            (torch.Tensor): the adjacency matrix after dropout in sparse COO format.
+        """
+        if not self.training:
+            return X
+        X = X.coalesce()
+        random_tensor = torch.rand(X._nnz(), device=X.device) + self.keep_prob
+        random_tensor = torch.floor(random_tensor).type(torch.bool)
+        indices = X.indices()[:, random_tensor]
+        values = X.values()[random_tensor] * (1.0 / self.keep_prob)
+        
+        return torch.sparse_coo_tensor(indices, values, X.shape, dtype=X.dtype)

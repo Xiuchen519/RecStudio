@@ -1,0 +1,5 @@
+embed_dim: 64
+layer_size: [64, 64]
+mess_dropout: [0.1, 0.1]
+node_dropout: 0.1
+weight_decay: 1e-6

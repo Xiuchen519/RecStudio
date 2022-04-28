@@ -5,3 +5,4 @@ pro_embed_dim: 64
 layer_size: [64]
 mess_dropout: [0.1]
 weight_decay: 1e-5
+n_fold: ~

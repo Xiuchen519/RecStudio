@@ -6,3 +6,4 @@ from recstudio.model.kg.KGLearning import *
 from recstudio.model.kg.kgnnls import KGNNLS
 from recstudio.model.kg.ktup import KTUP
 from recstudio.model.kg.mkr import MKR
+from recstudio.model.kg.ripplenet import RippleNet

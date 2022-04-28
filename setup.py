@@ -8,7 +8,8 @@ from setuptools import setup, find_packages
 
 install_requires = ['numpy>=1.20.1', 'torch>=1.9.0', 'scipy>=1.6.0', 'pandas>=1.3.0', 'tqdm>=4.48.2',
                     'colorlog==4.7.2','colorama==0.4.4', 'pyyaml>=5.1.0', 'tensorboard>=2.5.0', 
-                    'pytorch-lightning==1.4.9', 'nni==2.6.1']
+                    'pytorch-lightning==1.4.9', 'nni==2.6.1', 'faiss-gpu==1.7.2', 'torchmetrics==0.7.3',
+                    'dgl']
 
 setup_requires = []
 
@@ -34,13 +35,13 @@ if on_rtd:
 setup(
     name='recstudio',
     version=
-    '0.0.5',  # please remember to edit recbole/__init__.py in response, once updating the version
+    '0.0.1a3',  # please remember to edit recbole/__init__.py in response, once updating the version
     description='A modular, efficient, unified, and comprehensive recommendation library based on PyTorch.',
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url='https://github.com/RUCAIBox/RecStudio',
+    url='https://github.com/ustcml/RecStudio',
     author='USTCML',
-    author_email='xuhuangcs@mail.ustc.edu.cn',
+    author_email='liandefu@ustc.edu.cn',
     packages=[
         package for package in find_packages()
         if package.startswith('recstudio')
